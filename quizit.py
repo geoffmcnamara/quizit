@@ -139,13 +139,18 @@ def request_response(rspns="    What is your response? "):
     returns: ans - user response
     output:
     # to test python3 -m doctest -v ./quizit.py  # and hit enter
-    >>> request_response()
+    >>> request_response("testing only")
     ----------------------------------------
-        What is your response? ----------------------------------------
-    ''
+        What is your response? 
+    ----------------------------------------
+    'test only'
     """
     print("-" * 40)
-    ans = input(rspns)
+    if rspns == "testing only":
+        ans =   "test only"
+        print("    What is your response? ")
+    else:
+        ans = input(rspns)
     print("-" * 40)
     # filter the answer (ans) from the user to lower case and no quotes
     ans = str(ans.lower().strip().replace('"',''))
