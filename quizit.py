@@ -299,14 +299,25 @@ def celebrate():
         cmd: figlet "You are awesome"
     """
     begin_time = time.time()
+    celebrate_file = QUIZ_FILE_DIR + "/" + "quiz-celebrate.cfg"
+    if args['-c']:
+        if file_exists(celebrate_file):
+                # print("Found: " + celebrate_file)
+                #with open(celebrate_file) as f:
+                #    cf_lines = f.readlines()
+                # or
+                cf_lines = open(celebrate_file).read().splitlines()
+                cf_lines = [ l for l in cf_lines if not l.startswith("#") ]
+                # for line in cf_lines:
+                #    print("cf_line: " + line.strip())
+                line = random.choice(cf_lines)
+                line = line.strip()
+                # print("cmd line: " + line)
+                run_cmd(line)
     msg = "You did great!"
     sayit(msg,prnt=False)
     print("\n")
     boxit(msg,center=True)
-    # print("=" * 40)
-    if args['-c']:
-        if random.randint(0, 3) == 0:
-            run_cmd("sl")
     end_time = time.time()
     celebrate_time = end_time - begin_time
     return celebrate_time
