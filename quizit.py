@@ -53,8 +53,6 @@ Notes:
             You can also use "multiple choice", "multichoice", multi_choice"
             Also the choices can be separated by "," but this will fail if any of your choices have a comma in them : eg 12,000
     If a line in the DAT_FILE begins with "#" it will be ignore and treated as a comment
-
-
 """
 
 # ### imports ### #
@@ -71,6 +69,7 @@ from os.path import expanduser
 from gtools import boxit, run_cmd, select_file, file_exists, cls
 from math import ceil
 import random
+import re
 
 
 # ### globals - config ### #
@@ -114,7 +113,6 @@ def printit(msg, center=False, x=0, invisable=False, say=False):
     msg = (" "*pad_left) + msg
     if not invisable:
         print(msg)
-    # print("returning: [" + msg + "] pad_left=" + str(pad_left))
     return msg
 
 
@@ -163,7 +161,6 @@ def do_all_voices():
         engine.runAndWait()
 
 
-  
 # #############################################
 def showpics(dir='/home/geoffm/Pictures',num=1):
     # #########################################
@@ -172,7 +169,7 @@ def showpics(dir='/home/geoffm/Pictures',num=1):
     Note: this function can be removed/ignored
     used it once in the celebrate function to reward a right answer with some pics
     """
-    for i in range(0,num):
+    for i in range(0, num):
         cmd = 'find ' + dir + '/wallpapers/ | shuf -n 1'
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True, encoding='utf8')
         pic = process.stdout.readline()
@@ -191,13 +188,13 @@ def request_response(rspns="What is your response [q=quit]? "):
     # to test python3 -m doctest -v ./quizit.py  # and hit enter
     >>> request_response("testing only")
     ----------------------------------------
-        What is your response? 
+        What is your response?
     ----------------------------------------
     'test only'
     """
     printit("-" * 40, center=True)
     if rspns == "testing only":
-        ans =   "test only"
+        ans = "test only"
         printit("What is your response? ", center=True)
     else:
         # ans = input(rspns)
@@ -212,7 +209,7 @@ def request_response(rspns="What is your response [q=quit]? "):
     #     print("ans: [" + ans + "] which apparently is != [q]")
     printit("-" * 40, center=True)
     # filter the answer (ans) from the user to lower case and no quotes
-    ans = str(ans.lower().strip().replace('"',''))
+    ans = str(ans.lower().strip().replace('"', ''))
     return ans
 
 
@@ -221,7 +218,7 @@ def check_answer(ans, right_ans):
     # ############################
     """
     purpose: checks ans against right_ans - forces everything to lower case and strips out double quote marks and surrounding spaces
-    input: ans, right_ans - both are required
+        input: ans, right_ans - both are required
     """
     success = False
     # filter the answer from the dat file (elems[1]) to lower case and strip off spaces and double quote marks
@@ -231,7 +228,6 @@ def check_answer(ans, right_ans):
         ans_l = []
         ans_l = right_ans.replace(" ",'').split('|')
         right_ans = right_ans.replace('|', ' or ')
-        # print("ans_l: " + str(ans_l))
         if ans.strip() in ans_l:
             success = True
     if ans.strip() == "*":
@@ -250,13 +246,8 @@ def multi_choice(elems):
     input: elems # which is a [list]
     returns: ans # integer
     """
-    # print("DEBUG: len(elems): " + str(len(elems)))
-    # print("DEBUG: elems: " + str(elems))
-    # if elems[2].strip() == "multi_choice":
     print("\n")
     num = 1
-    # print(" ======\n")
-    #print("elems[3:]: " + str(elems[3:]))
     choices = []
     if len(elems) > 4:
         # here we assume choices have been split using ';'
@@ -268,14 +259,12 @@ def multi_choice(elems):
         items = elems[3].split(",")
         for item in items:
             choices.append(str(num) + ".) " + item.strip())
-            #printit(str(num) + ".) " + item, say=True, center=True)
             num += 1
     rows, columns = os.popen('stty size', 'r').read().split()
     max_choice_len = len(max(choices, key=len))
     for choice in choices:
         printit(choice, x=ceil((int(columns) - max_choice_len)/2))
     print("\n")
-    # ans = input("What is your choice? ")
     ans = request_response()
     return ans
 
@@ -302,21 +291,15 @@ def celebrate():
     celebrate_file = QUIZ_FILE_DIR + "/" + "quiz-celebrate.cfg"
     if args['-c']:
         if file_exists(celebrate_file):
-                # print("Found: " + celebrate_file)
-                #with open(celebrate_file) as f:
-                #    cf_lines = f.readlines()
-                # or
                 cf_lines = open(celebrate_file).read().splitlines()
                 cf_lines = [ l for l in cf_lines if not l.startswith("#") ]
-                # for line in cf_lines:
-                #    print("cf_line: " + line.strip())
                 line = random.choice(cf_lines)
-                line = line.strip()
-                # print("cmd line: " + line)
-                run_cmd(line)
+                if "skip" not in line.lower() or not bool(re.search('[a-zA-Z]',line)):
+                    # skipped lines gives the effect of random celebration rewards
+                    run_cmd(line)
+    print("\n")
     msg = "You did great!"
     sayit(msg,prnt=False)
-    print("\n")
     boxit(msg,center=True)
     end_time = time.time()
     celebrate_time = end_time - begin_time
@@ -341,39 +324,27 @@ def chk_syntax(lines):
     """
     quick check of syntax on lines
     """
-    # ques_types = ["joke", "riddle"] + multi_choice_types
     for line in lines:
         line = line.strip()
-        # print("line: " + line)
         semicolon_cnt = sum(map(lambda x : 1 if ';' in x else 0, line)) 
         if semicolon_cnt < 1:
             print("Syntax of line: [" + line + "] appears incorect... no [;] found...")
             return False
-        # print("semicolon_cnt: " + str(semicolon_cnt) + " line: " + line)
         elems = line.split(";")
-        # for item in elems:
-        #     print("item: " + item.strip())
         ques = elems[0].strip()
-        # print("ques: " + ques)
         ans = elems[1].strip()
-        # print("ans: " + str(ans))
         if ans == "":
             print("Problem with provided answer [" + str(ans) +"]")
             return False
-
         if semicolon_cnt > 1:
             ques_type = elems[2].strip()
-            # print("ques_type: " + ques_type)
             if ques_type not in ques_types:
                 print("Question type does not appear to be correct [" + ques_type + "]")
                 return False
             if "multi" in ques_type:
-                # for choice in elems[3:]:
-                #     print("choice: " + choice)
                 if semicolon_cnt < 3:
                     print("Not enough choices for ques_type [" + ques_type + "]")
                     return False
-            # print("hmmmm....")
     return True
 
 
@@ -391,7 +362,6 @@ def main():
     dtime=datetime.now().strftime("%Y%m%y-%H%M")
     msgs.append("The date is,... " + month + " "   + str(now.day)  + " " + str(now.year) + ", ... ")
     msgs.append("And the time is: " + str(now.hour) + " hours and " + str(now.minute) + " minutes")
-    # print("\n" * 4 + "=" * 40)
     for msg in msgs:
          sayit(msg, say=False)
     # ### DAT_FILE ### #
@@ -472,9 +442,6 @@ def main():
     boxit(title, center=True)
     # ### begin loop of lines in DAT_FILE ### #
     for line in lines:
-        # print("DEBUG: beginning of loop ques_cnt: " + str(ques_cnt) + " line: " + line)
-        # if line.startswith("#"):
-        #     continue
         ques_type = ""
         elems = line.split(";")
         if len(elems) > 2:
@@ -488,31 +455,18 @@ def main():
                     break
             elems = line.split(";")  
         ques_cnt += 1
-        # syntax of DAT_FILE
-        # "fields" are delimited with ";", answer options are separated by "|" meaning "or"
-        # question or statement | answer| optional_alt_answer| opt_alt_answer... | ques_type | multiple choices
-        #
         print("\n" * 2 )
-        # boxit(title, center=True)
         msgs = []
         msgs.append("Question: " + str(ques_cnt))
-        # boxit("Question: " + str(ques_cnt))
-        # line = line.replace('\n','')
-        # print("Debug: elems: " + str(elems))
         ques = elems[0]
         msgs.append("-" * 20)
         msgs.append(ques)
         right_answer = elems[1]
-        # sayit(ques, say=True, prnt=False)
-        # boxit(ques)
-        # print(f"before call to boxit msgs: {msgs}")
         boxit(msgs,center=True,y=5)
         if len(elems) > 2:
             ques_type = str(elems[2].strip().lower())
-            # print("DEBUG: ques_type: " + ques_type)
             if ques_type in multi_choice_types:
                 ans = multi_choice(elems)
-                # continue
             elif ques_type == "gimmie":
                 # the user will be out right given a point in the score as a bonus
                 score += 1
@@ -534,26 +488,20 @@ def main():
         else:  # no ques_type declared - simple answer question
             ans = request_response()
         if check_answer(ans, right_answer):  # WIP
-            # print(f"running celebrate")
             remove_time += celebrate()
             score += 1
         else:
             disappoint()
         pcnt = str(round(score*100/ques_cnt,2))
         printit("Score: " + str(score) + " out of " + str(ques_cnt) + " Your percent correct = " + str(round(score*100/ques_cnt,2)) +"%", center=True)
-    # print out the final score and elapsed time
-    # TODO eventually this should have a user sign in and have these results saved
     printit("=" * 40, center=True)    
     end = time.time()
     elapsed_time = (end - start) - remove_time
-    # print("DEBUG: start: " + str(start) + " end: " + str(end) + " remove_time: " + str(remove_time))
-    msg = f"The elapsed time: {(elapsed_time):0.2f} seconds"
+    msg = f"The elapsed time: {(elapsed_time):0.2f} seconds (minus celebration time)"
     printit(msg, center=True, say=True)
-    # printit("Score: " + str(score) + " out of " + str(ques_cnt) + " questions.", say=True, center=True)
     if USER != "none":  # This should always be the case if FORCE_USER is true
         # assuming QUIZ_FILE_DIR has been created at the beginning of main()
         msg = f"User: {USER:15}, Dtime: {dtime}, DatFile: {BASENAME_DAT_FILE:15}, Score: {pcnt:>6}%, Elapsed_time: {end-start:0.2f}, Num ques: {ques_cnt:6}"
-        # printit(msg, center=True)
         global OUT_FILE
         with open(OUT_FILE,'a') as f:
             f.write(msg + "\n")
@@ -575,7 +523,6 @@ def do_edit(file, lnum=0):
     else:
         cmd = f"vim {file}"
     r = subprocess.call(cmd, shell=True)
-    # print(f"{cmd}")
     return r
 
 
@@ -585,7 +532,6 @@ def handleOPTS(args):
     """
     purpose: handles options
     """
-    #print(f"DEBUG: handleOPTS args: {args}")  # this is for DEBUG
     if args['-E']:
         do_edit(__file__)
         sys.exit()
@@ -602,13 +548,7 @@ def handleOPTS(args):
         # print("USER: " + USER)
 
 
-
 if __name__ == "__main__":
-    # TODO need to add docopts to optionally take a DAT_FILE name to run
-    # TODO add a way to track a user and final scores with elapsed times - KISS eg: sqlite3 quizit.db 
-    # quizit.db schema id, username, dat_file(test name), dat_file last mod date?,  date, score (#questions, #bonus quest, #right), elapsed_time, notes, created, modified?
-    # import doctest
-    # doctest.testmod()
     from docopt import docopt
     args = docopt(__doc__) # , version=__file__ + "0.9")
     handleOPTS(args)
