@@ -449,7 +449,6 @@ def do_kv_cols(d, cols, color=BLUE, title="", col_limit=25):
             # lline = f"|| {k:<20} | {v:>20} |"
             # line = f"{color}||{RESET} {k:<{max_k}} {color}|{RESET} {v:>{max_v}} {color}|{RESET}"
             line = "{}||{} {:<{max_k}} {}|{} {:>{max_v}} {}|{}".format(color, RESET, k, color, RESET, v, color, RESET)
-            
             # lline = f"|| {k:<{max_k}} | {v:>{max_v}} |"
             lline = "|| {:<{max_k}} | {:>{max_v}} |".format(k, v)
             if c == cols:  # or to put another way if cols == 0
