@@ -5,7 +5,7 @@
 #    with each question a score is provided
 #    a bonus is added for questions that have the ques_type as joke or riddle
 # requires:
-#     gtools3.py
+#     gtools.py
 #     dbug.py
 #     a dat_file - see below should be placed in a subdir called ./quiz-files/
 #           python3
@@ -14,7 +14,7 @@
 #     You need to write the DAT_FILE and configure it's location below
 # ############################
 
-"""  
+"""
 -h --help    show this
 -R           to select a DAT_FILE and view it for review - like Reviewing notes before a test. Use "q" to quit.
 -f DAT_FILE  specify test data file
@@ -75,8 +75,8 @@ import time
 import subprocess
 from time import sleep
 # from random import randint
-import sys 
-import os 
+import sys
+import os
 from os.path import expanduser
 # from math import ceil
 import random
@@ -84,12 +84,10 @@ import re
 import pandas as pd
 import readline
 sys.path.append("/home/geoffm/dev/python/gmodules/")
-from gtools3 import (dbug, docvars, run_cmd, file_exists, cls, path_to, do_list, printit, select_file,
-                    cinput, do_logo, do_close, rootname, do_edit, has_alnum, allmax, askYN, 
-                    gselect, gclr, sub_color, list_files, gcolumnize, boxed, gcolumnize, isnumber
-                    )
-
-# from rtools import rprint, raskYN, rlogo, rclose 
+from gtools import (dbug, docvars, run_cmd, file_exists, cls, path_to, do_list, printit, select_file,
+                    cinput, do_logo, do_close, rootname, do_edit, has_alnum, askYN,
+                    gselect, gclr, sub_color, list_files, gcolumnize, boxed, gcolumnize, isnumber,
+                    purify_file, get_random_line, splitit, gblock, bool_val, kvarg_val)
 
 
 # ### GLOBALS - CONFIG ### #
@@ -117,29 +115,207 @@ f_ratio = 70
 # engine.setProperty('rate', 150)  # Speed percent (can go over 100)
 # engine.setProperty('volume', volume)  # Volume 0-1
 
+# ### GLOBALS ### #
+DFMT = "%Y%m%d-%H%M"
+DTIME = datetime.now().strftime(DFMT)
+SYNTAX_MSG = """
+--------------------------------------------------------------------
+# ### The syntax can be a challenge... here are some examples: ### #
+--------------------------------------------------------------------
+True or False Ben Fanklin was a founding father.; T
+Who wrote "Hamlet"?; 3; multi; Charles Babage, Homer, Shakespeare, Ben Franklin
+True or False.. this question has a hint.; T # [h] This is a hint available to the user if they type "h"
+Please type what the Spanish word "gato" means in English: cat
+This question has additional info True or False; T # [i] When "[i]" is in the comment, what comes after it will be presented after the user attempts to answer
+This question allows multiple answers; 1|2; this answer will be accepted, this one will also be excepted, this one will not be accepted
+5 + 4 =; 9|nine   # allows 9 or nine as an answer
+How far can a fox run into the woods?; halfway| half way; riddle  # user will get a bonus point if they get it right
+Gimmie: Why is 6 afraid of 7 ?; because 7, 8, 9; gimmie # any answer will be accepted....
+Joke: Why is 6 afraid of 7 ?; because 7, 8, 9; joke # not included in the score
+--------------------------------------------------------------------
+"""
+
 # ### FUNCTIONS ### #
 
 
-# # #################################
-# def sayit(msg, say, prnt=False):
-#     # ############################
-#     """
-#     will say outloud the msg provided
-#     optionally you tell it to print or not print or say or not say
-#     eg:
-#     >>> msg = "Dave, don't do that"
-#     >>> sayit(msg, say=True, prnt=True)
-#     Dave, don't do that
-#     #  or
-#     >>> sayit(msg, say=True, prnt=False)
-#     Enjoy!
-#     """
-#     if prnt:
-#         print(msg)
-#     if say:
-#         engine.say(msg)
-#         engine.runAndWait()
-#
+def tst(arg1="unknown1", arg2="unknown2"):
+    """
+    This is just an example testing function. This example shows how you can quickly test whatever you want (any function) while you are still editing a file
+    You can completely remove this function
+        or rename it
+        or call another function within it
+        or leave it as an example.
+        It demonstrates the use of the -T argument.
+    """
+    msg = """
+    This is a test function and can be called while editing in vim with...  :! ./% -T tst
+    or  :! ./% -T tst \"This is farg1\"
+    or  :! ./% -T tst \"This is farg1\"  \"This is farg2\"
+    Note: the args here are separated by a space.
+    """
+    dbug(msg, 'boxed', 'centered', box_color="yellow! on grey80")
+    dbug(arg1)
+    dbug(arg2)
+
+
+
+def get_qa(contents, delimiter=" "):
+    """
+    purpose:
+    input:
+    returns:
+    """
+    # dbug(delimiter)
+    rand_line = get_random_line(contents)
+    # dbug(rand_line)
+    # phrases = rand_line.split(delimiter)
+    # phrases = rand_line.rpartition(delimiter)
+    # phrases = re.split('["|\'] +- +', rand_line)
+    # phrases = re.split(delimiter, rand_line)
+    phrases = splitit(rand_line, delimiter)
+    # dbug(phrases)
+    try:
+        question = phrases[0]
+        question = question.lstrip('"')
+        question = question.lstrip("'")
+        answer = phrases[1]
+    except Exception as Error:
+        dbug(Error)
+        dbug(f"\nrand_line: [{rand_line}]\nphrases: {phrases}")
+    # dbug(f"returning question: {question} answer: {answer}", 'ask')
+    return question, answer
+
+
+def playloop(mode):
+    """--== Init ==--"""
+    shuffle_b = False
+    if mode == 'vocab':
+        # voc_file
+        # voc_file = "Vocabulary_list.csv"
+        voc_file = QUIZ_FILE_DIR + "/Vocabulary_list.csv"
+        filename = voc_file
+        delimiter = ","
+    if mode == 'quotes':
+        # shuffle_b = False
+        if args['--shuffle']:
+            shuffle_b = True
+        # dbug(shuffle_b, 'ask')
+        # quote_file
+        # quote_file = "~/data/lines.dat"
+        quote_file = QUIZ_FILE_DIR + "/lines.dat"
+        filename = quote_file
+        delimiter = r"[\"|\'] +[-–—―] +"  # amazingly all those dashes are different symbols...
+    """--== SEP_LINE ==--"""
+    max_deflectors = 4
+    deflectors = []
+    """--== SEP_LINE ==--"""
+    filename = os.path.expanduser(filename)
+    contents = purify_file(filename)
+    """--== SEP_LINE ==--"""
+    repeat_flag = False
+    while True:
+        cls()
+        print("\n"*4)
+        if not repeat_flag:
+            # get a new question
+            deflectors = []
+            question, answer = get_qa(contents, delimiter)
+            # dbug(question)
+            # dbug(answer)
+            deflectors.append(answer)
+            # dbug(deflectors, 'ask')
+        while len(deflectors) < max_deflectors:
+            # dbug(deflectors)
+            # word, definition = get_def_and_pop(wd_list, word_dict)
+            # choice_list.append(definition)
+            deflector_question, deflector_answer = get_qa(contents, delimiter)
+            """--== avoid repeat question of repeat deflector ==--"""
+            if deflector_question == question or deflector_answer in deflectors:
+                # dbug(f"found {deflector_answer} in deflectors: {deflectors} question: {question}")
+                continue
+            else:
+                # dbug(f"not found {deflector_answer} deflectors: {deflectors} question: {question}")
+                deflectors.append(deflector_answer)
+        # random.shuffle(choice_list)
+        random.shuffle(deflectors)
+        # print(word)
+        """--== print question ==--"""
+        if shuffle_b:
+            move_on = False
+            X = 4
+            orig_words = question.split()
+            while not move_on:
+                words = question.split()
+                # dbug(orig_words)
+                X += 1
+                quote_start = " ".join(orig_words[:X])
+                remaining_words = words[X:]
+                printit(quote_start + "......", 'boxed', 'centered', title=f"First {X} words of quote:")
+                # askYN()
+                random.shuffle(remaining_words)
+                dbug(remaining_words)
+                # dbug(words)
+                msg = []
+                msg.append(", ".join(remaining_words))
+                if len(msg) == 0:
+                    continue
+                printit(msg, 'boxed', 'centered', title="From this list rearrage the words to recreate the proper quote.")
+                printit("Proper quote:", 'centered')
+                question_len = len(question)
+                # dbug(question_len)
+                shift = -(question_len // 2) + 10
+                # dbug(shift)
+                proper_quote = cinput("Your answer: ", shift=shift, dflt=quote_start)
+                if proper_quote == " ".join(orig_words):
+                    print("\n" * 3)
+                    printit("[green!]Correct![/]\n", 'boxed', 'centered', box_color="white! on black")
+                    print("\n" * 3)
+                    move_on = True
+                else:
+                    # dbug("not so much")
+                    printit(" ".join(orig_words), 'boxed', 'centered', title="Proper quote")
+                    if askYN("Do you want to move on?", "y", 'centered'):
+                        move_on = True
+        else:
+            printit(question, 'boxed', 'centered', txt_center=99)
+        # print("---------------")
+        """--== print deflectors and ask user ==--"""
+        choice = gselect(deflectors, 'centered', rtrn="k", footer="[e,q]")
+        if choice in ('e'):
+            printit(msg)
+            askYN("Continue?")
+            do_edit(filename)
+            do_close()
+        if choice in ("q", "Q", ""):
+            do_close()
+        if isnumber(choice):
+            choice = int(choice)
+        # dbug(choice)
+        """--== provide feedback ==--"""
+        if len(additional_info) > 1:
+            printit(additional_info, 'boxed', 'centered', footer=dbug('here'))
+        if deflectors[choice-1] == answer:
+            # correct
+            # print("Correct!\n")
+            print("\n" * 3)
+            printit("[green!]Correct![/]\n", 'boxed', 'centered', box_color="white! on black")
+            print("\n" * 3)
+            askYN("", 'centered')
+            repeat_flag = False
+        elif choice == 0:
+            # exit
+            exit(0)
+        else:
+            # incorrect
+            # print("Incorrect")
+            print("\n" * 3)
+            printit("[red!]Incorrect![/]", 'boxed', 'centered', box_color="white! on black")
+            print("\n" * 3)
+            if askYN("Try again?", "y", 'centered'):
+                repeat_flag = True
+            else:
+                printit(f"Correct answer: {answer}", 'boxed', 'centered', box_color="white! on black")
+                askYN("Continue?", 'centered')
 
 
 # ###################
@@ -244,10 +420,11 @@ def check_answer(ans, right_ans):
     #console = Console
     global f_ratio
     # f_ratio = 60  # TODO make this a GLOBAL
-    if args['-f']:
+    if args['-F']:
         from thefuzz import fuzz
         if args['ratio']:
             f_ratio = args['ratio']
+        dbug(f"User has Fuzzy Logic invoked and f_ratio: {f_ratio}.")
     fuzz_msg = ""
     success = False
     # dbug(f"ans: {ans} right_ans: {right_ans}")
@@ -280,21 +457,21 @@ def check_answer(ans, right_ans):
         if ans.strip() in ans_l:
             # dbug(f"Success... ans: {ans}")
             success = True
-        if args['-f']:
+        if args['-F']:
             for i in ans_l:
                 #ans = ans.strip()
                 #elem = i.strip()
                 fuzz_ratio = fuzz.ratio(ans, i)
-                # dbug(f"fuzz_ratio: {fuzz_ratio} Your answer: ={ans}= Possible i: ={i}=") 
-                # ans = "namea" 
+                dbug(f"fuzz_ratio: {fuzz_ratio} Your answer: ={ans}= Possible i: ={i}=")
+                # ans = "namea"
                 i = "namea"
                 fuzz_ratio = fuzz.ratio(ans, i)
-                print(f"fuzz_ratio: {fuzz_ratio} Your answer: ={ans}= Possible i: ={i}=") 
-                # dbug(f"fuzz_ratio: {fuzz_ratio} f_ratio: {f_ratio}") 
-                if fuzz_ratio >= f_ratio: 
+                print(f"fuzz_ratio: {fuzz_ratio} Your answer: ={ans}= Possible i: ={i}=")
+                # dbug(f"fuzz_ratio: {fuzz_ratio} f_ratio: {f_ratio}")
+                if fuzz_ratio >= f_ratio:
                     fuzz_msg = "However, you got close enough to call this a success ..."
                     success = True
-                    break 
+                    break
     if '&' in right_ans:
         ans_l = []
         ans_l = right_ans.replace(" ", '').split('&')
@@ -320,7 +497,7 @@ def check_answer(ans, right_ans):
         success = True
         # dbug(f"fuzz_ratio: {fuzz_ratio} f_ratio: {f_ratio} ans: {ans} ")
     printit(f"Expected answer is: " + sub_color('bold yellow') + f"{right_ans}" + sub_color('reset') + " your answer is: " + sub_color('bold yellow') + ans + sub_color('reset'), center=True)
-    # if args['-f']:
+    # if args['-F']:
     #     fuzz_ratio = fuzz.ratio(ans, right_ans)
     #     if fuzz_ratio >= f_ratio:
     #         fuzz_msg = "[bold yellow]However[/],you got close enough to call this a success ...!!!"
@@ -336,7 +513,9 @@ def blank_choice(elems):
     # ##########
     """
     WIP
+    not used????
     """
+    dbug("Does anyone use this?")
     # dbug(f"func: blank_choice({elems})")
     ans = input("What is your response: ")
     if "," in ans:
@@ -553,36 +732,50 @@ def process_lines(lines, ques_cnt=0, scored_ques_cnt=0, num_ques=0, score=0, rem
     while LOOP:
         # dbug(lines)
         for line in lines:
+            additional_info = ""
+            hint = ""
+            ques_type = ""
+            msgs = []
             # dbug(f"processing line: {lines_processed}")
             hint = ""
             # dbug(f"ques_cnt: {ques_cnt} num_ques: {num_ques}")
             if ques_cnt >= num_ques:
-                LOOP = False  # noqa:
+                LOOP = False
                 # dbug(f"the loop should end here")
                 break
-                # if args['NUM'] > num_ques:  # WIP
             # dbug(f"ques_cnt {ques_cnt} num_ques: {num_ques}")
-            hint = ""
-            ques_type = ""
-            msgs = []
             # dbug(f"line: {line}")
+            # printit(line, 'boxed', title="printit(line, boxed...)", footer=dbug('here'))
             # dbug(f"hint: {hint}")
-            if "[h]" in line.partition('#')[2]:
-                hint = line.partition('[h]')[2]
+            phrases = line.partition("#")
+            # dbug(phrases[2])  # keep in mind that "#" becomes a phrase as well
+            # if "[h]" in line.partition('#')[2]:
+            if "[h]" in phrases[2]:
+                hint = phrases[2].replace("[h]", "")
                 # dbug(f"line: {line}")
                 # dbug(f"hint: {hint}")
+            # if "[i]" in line.partition('#')[2]:
+            if "[i] " in phrases[2]:
+                # dbug(phrases[2])
+                additional_info = phrases[2]
+                additional_info = additional_info.replace("[i] ", "").strip()
+                # dbug(additional_info)
+                additional_info = additional_info.replace("\\n", "\n")
             # this ignores trailing comments
             # if not line.strip():  # if the line is empty.. empty string is a False value
                 # dbug("Found a blank line")  # skip blank lines
             # dbug(line)
             # if not line.isalnum() or line == "":  # blank lines will get skipped  # noqa:
-            # if line == "":  # blank lines will get skipped  # noqa:
-            if not has_alnum(line):  # blank lines will get skipped  # noqa:
+            # if line == "":  # blank lines will get skipped
+            if not has_alnum(line):  # blank lines will get skipped
                 # dbug(f"line: {line} continuing on...")
                 LOOP = True
                 continue
+            # dbug(line)
+            # printit(line, 'boxed', footer=dbug('here'))
             line = line.partition('#')[0]  # if a line has a comment just get what is before it
             # dbug(line)
+            # printit(line, 'boxed', footer=dbug('here'))
             # elems = line.split(";")
             elems = re.split(r'(?<!\\);', line)  # spliting line into elements using ";" as a delimiter
             # dbug(f"elems: {elems}")
@@ -605,7 +798,8 @@ def process_lines(lines, ques_cnt=0, scored_ques_cnt=0, num_ques=0, score=0, rem
                     # request_response(rspns="This is for your information only. Hit Enter to continue.")  # noqa:
                     msg = "Information only. Hit " + sub_color("white") + "Enter" + sub_color('reset') + " to continue..."
                     # askYN(msg, 'center')
-                    cinput(msg)
+                    ans = cinput(msg)
+                    dbug(ans)  # needs documentation
                     cls()
                     # dbug("???")
                     do_quizit_title()
@@ -620,7 +814,7 @@ def process_lines(lines, ques_cnt=0, scored_ques_cnt=0, num_ques=0, score=0, rem
             # dbug(f"elems: {elems}")
             # dbug(f"args: {args}")
             if args['-r']:
-                # select a random line 
+                # select a random line
                 # dbug(f"ques_type: {ques_type} line: {line}")
                 hint = ""
                 """
@@ -646,7 +840,7 @@ def process_lines(lines, ques_cnt=0, scored_ques_cnt=0, num_ques=0, score=0, rem
                 # if args['NUM'] is not None:
             if ques_cnt > num_ques:
                 LOOP = False
-                dbug(f"the loop should have ended here")
+                dbug("the loop should have ended here")
                 break
                 # elems = re.split(r'(?<!\\);', line)
             # ques_cnt += 1
@@ -682,7 +876,8 @@ def process_lines(lines, ques_cnt=0, scored_ques_cnt=0, num_ques=0, score=0, rem
                         choice = choice.partition('#')[0]  # if a line has a comment just get what is before it
                         # dbug(f"adding choice: {choice}")
                         new_choices.append(choice)
-                    new_choices = allmax(new_choices)
+                    # dbug(new_choices)
+                    new_choices = gblock(new_choices)
                     # dbug(new_choices)
                     msgs = msgs + new_choices
                     # dbug(f"calling boxit(msgs: {msgs})")
@@ -719,6 +914,11 @@ def process_lines(lines, ques_cnt=0, scored_ques_cnt=0, num_ques=0, score=0, rem
                 # printit(msgs, 'boxed', 'centered', center=99, title=title, footer=" Capitalization is not important, spelling is... ", box_color='yellow')
                 printit(msgs, 'boxed', 'centered', center=99, title=title, footer=" Capitalization is not important, spelling is... ", box_color='bold yellow on rgb(40,40,40)')
             ans = request_response(hint=hint)
+            if len(additional_info) > 1:
+                print()
+                printit(additional_info, 'boxed', 'centered', title=" Additional Information", footer=dbug('here'), box_color="white on black")
+                print()
+                additional_info = ""
             if ques_type == "riddle":
                 lines = f'The corrent answer:  {right_answer.replace("|", " or ")}\n'
                 lines += "This program is unable to score a riddle because the wording can be phrased many different ways. "
@@ -791,8 +991,9 @@ def do_quizit_title():
     print("\n"*4)
 
 
-def get_categories_lvls():
+def get_categories_lvls(*args, **kwargs):
     #category = args['CATEGORY']
+    rtrn_type = kvarg_val("rtrn", kwargs, dflt="")
     categories = []
     cat_files_d = {}
     levels_d = {"0": 0}
@@ -847,6 +1048,8 @@ def get_categories_lvls():
     # dbug(categories)
     # dbug(cat_files_d)
     # dbug(lvl_files_d)
+    if rtrn_type in ("cat", "category", "cats", "categories", "c"):
+        return cat_files_d
     levels_d['0'] = cnt - len(lvl_files_d)
     return categories, levels_d, cat_files_d, lvl_files_d
 
@@ -872,6 +1075,7 @@ def main(args):
         else:
             do_close()
     global DAT_FILE
+    # dbug(f"DAT_FILE: {DAT_FILE}", 'ask')
     try:
         # dbug(f"trying to see if DAT_FILE != empty ")
         os.path.exists(DAT_FILE)
@@ -885,7 +1089,7 @@ def main(args):
     categories, levels_d, cat_files_d, lvl_files_d = get_categories_lvls()
     levels_box = boxed(f"Levels {len(levels_d) - 1} No_Lvl_Declared: {levels_d['0']}", title=" Levels Info ", footer="L)evel Selection", box_color=row1_box_color)
     # cats_box = boxed(gcolumnize(categories), title=" Categories Information ", footer=" C)ategory Selection ", box_color=row1_box_color)
-    cats_box = boxed(f"Categories: {len(categories)}", title=" Categories Information ", footer=" C)ategory Selection ", box_color=row1_box_color)
+    cats_box = boxed(f"Categories: {len(categories)}", title=" Categories Information ", footer=" C)ategory Selection ", box_color=row1_box_color, txt_center=99)
     # boxes = []
     # boxes.append(box_cats)
     # boxes.append(levels_box)
@@ -898,11 +1102,11 @@ def main(args):
         for n, quiz in enumerate(quiz_names, start=1):
             quiz_selections.append(f"{n:>3}) {quiz}")
         # dbug(type(quiz_selections))
-        box_quizes = boxed(gcolumnize(quiz_selections), title="Quiz Names", box_color="cyan")
+        box_quizes = boxed(gcolumnize(quiz_selections, cols=5), title="Quiz Names", box_color="cyan")
         row1 = gcolumnize([levels_box, cats_box])
         row2 = box_quizes
         quiz_selections_content = row1 + row2
-        printit(quiz_selections_content, 'boxed', 'centered', center=99, title="Quiz Selections", box_color="white on black")
+        printit(quiz_selections_content, 'boxed', 'centered', center=99, title="Quiz Selections", box_color="white on black", txt_center=99)
         quiz = cat_ans = lvl_ans = "unknown"
         ans = cinput("Please select: L)evel C)ategory or Q)uit: ")
         # dbug(ans)
@@ -912,9 +1116,11 @@ def main(args):
         if isnumber(ans):
             quiz = quiz_files[int(ans)-1]
         if ans in ("c", "C"):
-            cat_ans = gselect(categories, 'centered', rtrn="v")
-            dbug(cat_ans)
-            quiz = gselect(cat_files_d[cat_ans], 'centered')
+            cat_ans = gselect(categories, 'centered', rtrn="v", cols=4)
+            # dbug(cat_ans)
+            quiz = gselect(cat_files_d[cat_ans], 'centered', rtrn="v", cols=2)
+            cls()
+            # dbug(quiz)
         if ans in ("l", "L"):
             lvl_ans = gselect(levels_d, 'centered', rtrn="k")
             select_files_d = lvl_files_d[lvl_ans]
@@ -922,9 +1128,9 @@ def main(args):
         # dbug(quiz)
         """--== SEP_LINE ==--"""
         DAT_FILE = quiz
-    if ans in ("E"):
-        do_edit(__file__)
-        do_close()
+        if ans in ("E"):
+            do_edit(__file__)
+            do_close()
     try:
         # all non-commented out lines:
         lines = [line.rstrip() for line in open(DAT_FILE) if not line.startswith("#")]
@@ -945,6 +1151,8 @@ def main(args):
     if not chk_syntax(lines):
         ans = input("Do you want to edit this file [" + DAT_FILE + "] (y|n)? ")
         if "y" in ans.lower():
+            printit(SYNTAX_MSG)
+            askYN()
             do_edit(DAT_FILE)
         sys.exit()
     for line in lines:
@@ -1035,7 +1243,6 @@ def main(args):
     # ### END: def main(args):
 
 
-
 @docvars(os.path.basename(__file__))
 # ###################
 def handleOPTS(args):  # noqa:
@@ -1055,9 +1262,13 @@ def handleOPTS(args):  # noqa:
         {0} -u USER
         {0} -r [NUM]
         {0} --nr NUM
-        {0} -f [ratio]
+        {0} -F [ratio]
+        {0} --vocab
+        {0} --quotes [--shuffle]
+        {0} --create
     """
     global say
+    global DAT_FILE
     # dbug("args: " + str(args))
     if args['-E']:
         NUM = ""  # noqa:
@@ -1067,6 +1278,8 @@ def handleOPTS(args):  # noqa:
         sys.exit()
     if args['-e']:
         if args['DAT_FILE'] is not None:
+            printit(SYNTAX_MSG)
+            askYN()
             do_edit(args['DAT_FILE'])
             # do_edit(QUIZ_FILE_DIR + "/" + args['DAT_FILE'])
         else:
@@ -1074,6 +1287,8 @@ def handleOPTS(args):  # noqa:
             do_logo(rootname(__file__), 'centered', figlet=True, box_color="yellow")
             printit("Select a file for editing please", 'centered')
             dat_file = select_file(QUIZ_FILE_DIR, 'centered', 'boxed', 'shadowed', pattern="*.dat")
+            printit(SYNTAX_MSG)
+            askYN()
             do_edit(dat_file)
         sys.exit()
     if args['-f']:
@@ -1081,6 +1296,18 @@ def handleOPTS(args):  # noqa:
         # f_ratio = 70
         if args['ratio']:
             f_ratio = args['ratio']
+    if args['-C']:
+        # global DAT_FILE
+        cat_files_d = get_categories_lvls(rtrn="cats")
+        cat_ans = gselect(cat_files_d, 'centered', rtrn="v", cols=4)
+        # dbug(cat_ans)
+        quiz = gselect(cat_ans, 'centered', rtrn="v", cols=2)
+        # quiz = gselect(cat_files_d[cat_ans], 'centered', rtrn="v", cols=2)
+        # dbug(f"DAT_FILE: {DAT_FILE}")
+        cls()
+        DAT_FILE = quiz
+        # dbug(DAT_FILE)
+        # main(args)
     if args['-S']:
         say = True
     if args['-R']:  # open quiz for review only
@@ -1114,13 +1341,32 @@ def handleOPTS(args):  # noqa:
         print("=" * 40)
         sys.exit()
     if args['-f']:  # select a specific quiz by file name
-        global DAT_FILE
+        # global DAT_FILE
         DAT_FILE = args['-f']
         # print("Setting DAT_FILE to " + DAT_FILE)
     if args['-u']:  # inserts username, avoids being asked for the name
         global USER
         USER = args['-u']
         # print("USER: " + USER)
+    if args['--vocab']:
+        playloop("vocab")
+    if args['--quotes']:
+        playloop('quotes')
+    if args['--create']:
+        # global QUIZ_FILE_DIR
+        filename = cinput("Please provide a filename (you should end it with '.dat':")
+        filename = QUIZ_FILE_DIR + "/" + filename
+        if not file_exists(filename):
+            hdr = ["# category: none level: 0\n"]
+            hdr.append("# Syntax: question or statement ; answer | or answer |or an other answer... ; ques_type ; multiple_choice_1, multiple_choice_2, ...\n")
+            hdr.append("# For quotes the syntax is: \"Your quote\" - author\n")
+            hdr.append("# For vocab the syntax is: word, definitio\n")
+            with open(filename, "w")as f:
+                f.writelines(hdr)
+        printit(SYNTAX_MSG)
+        askYN()
+        do_edit(filename)
+        return
 
 
 if __name__ == "__main__":
